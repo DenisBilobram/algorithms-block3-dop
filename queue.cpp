@@ -2,63 +2,65 @@
 #include <stack>
 #include <algorithm>
 #include <functional>
+#include <stdexcept>
+#include <cassert>
 
-using namespace std;
-
-template<typename T, typename F = function<T(T, T)>>
-class AggQueue {
+template<typename T, typename F>
+class AggregateQueue {
 private:
-    stack<pair<T, T>> inputStack, outputStack;
+    std::stack<T> inputStack, outputStack;
+    std::stack<T> inputAggStack, outputAggStack;
     F func;
 
-    void pushWithAgg(stack<pair<T, T>>& stack, T value) {
-        T currentAgg = stack.empty() ? value : func(value, stack.top().second);
-        stack.push({value, currentAgg});
+    void pushWithAgg(std::stack<T>& stack, std::stack<T>& aggStack, T value) {
+        T currentAgg = aggStack.empty() ? value : func(value, aggStack.top());
+        stack.push(value);
+        aggStack.push(currentAgg);
     }
 
     void transferIfNeeded() {
         if (outputStack.empty()) {
             while (!inputStack.empty()) {
-                T element = inputStack.top().first;
-                pushWithAgg(outputStack, element);
+                T element = inputStack.top();
                 inputStack.pop();
+                pushWithAgg(outputStack, outputAggStack, element);
+                inputAggStack.pop();
             }
         }
     }
 
 public:
-    AggQueue(F f) : func(f) {}
+    AggregateQueue(F f) : func(f) {}
 
     void enqueue(T value) {
-        pushWithAgg(inputStack, value);
+        pushWithAgg(inputStack, inputAggStack, value);
     }
 
     void dequeue() {
-        if (inputStack.empty() && outputStack.empty()) {
-            cout << "Queue is empty! Cannot dequeue." << endl;
-            return;
+        if (isEmpty()) {
+            throw std::runtime_error("Queue is empty! Cannot dequeue.");
         }
         transferIfNeeded();
         outputStack.pop();
+        outputAggStack.pop();
     }
 
     T getAgg() {
-        if (inputStack.empty() && outputStack.empty()) {
-            cout << "Queue is empty!" << endl;
-            throw runtime_error("Queue is empty!");
+        if (isEmpty()) {
+            throw std::runtime_error("Queue is empty!");
         }
         if (inputStack.empty()) {
-            return outputStack.top().second;
+            return outputAggStack.top();
         }
         if (outputStack.empty()) {
-            return inputStack.top().second;
+            return inputAggStack.top();
         }
-        return func(outputStack.top().second, inputStack.top().second); 
+        return func(outputAggStack.top(), inputAggStack.top());
     }
 
     T peek() {
         transferIfNeeded();
-        return outputStack.top().first;
+        return outputStack.top();
     }
 
     bool isEmpty() {
@@ -67,33 +69,33 @@ public:
 };
 
 int main() {
+    auto minFunc = [](int a, int b) { return std::min(a, b); };
+    auto maxFunc = [](int a, int b) { return std::max(a, b); };
+    auto sumFunc = [](int a, int b) { return a + b; };
 
-    function<int(int, int)> minFunc =  [](int a, int b) { return min(a, b); };
-    function<int(int, int)> maxFunc =  [](int a, int b) { return max(a, b); };
-    function<int(int, int)> sumFunc =  [](int a, int b) { return a + b; };
-
-    AggQueue<int, function<int(int, int)>> minQueue(minFunc);
-    AggQueue<int, function<int(int, int)>> maxQueue(maxFunc);
-    AggQueue<int, function<int(int, int)>> sumQueue(sumFunc);
+    AggregateQueue<int, decltype(minFunc)> minQueue(minFunc);
+    AggregateQueue<int, decltype(maxFunc)> maxQueue(maxFunc);
+    AggregateQueue<int, decltype(sumFunc)> sumQueue(sumFunc);
 
     minQueue.enqueue(5);
     minQueue.enqueue(3);
     minQueue.enqueue(1);
     minQueue.enqueue(7);
-    cout << "Minimum: " << minQueue.getAgg() << endl; // Ожидается 1
+    assert(minQueue.getAgg() == 1);
 
     maxQueue.enqueue(5);
     maxQueue.enqueue(3);
     maxQueue.enqueue(1);
     maxQueue.enqueue(7);
-    cout << "Maximum: " << maxQueue.getAgg() << endl; // Ожидается 7
-
+    assert(maxQueue.getAgg() == 7);
 
     sumQueue.enqueue(5);
     sumQueue.enqueue(3);
     sumQueue.enqueue(1);
     sumQueue.enqueue(7);
     sumQueue.dequeue();
-    cout << "Sum: " << sumQueue.getAgg() << endl; // Ожидается 11
+    assert(sumQueue.getAgg() == 11);
+
+    std::cout << "All tests passed!" << std::endl;
     return 0;
 }
