@@ -5,12 +5,12 @@
 #include <stdexcept>
 #include <cassert>
 
-template<typename T, typename F>
+template<typename T>
 class AggregateQueue {
 private:
     std::stack<T> inputStack, outputStack;
     std::stack<T> inputAggStack, outputAggStack;
-    F func;
+    std::function<T(T, T)> func;
 
     void pushWithAgg(std::stack<T>& stack, std::stack<T>& aggStack, T value) {
         T currentAgg = aggStack.empty() ? value : func(value, aggStack.top());
@@ -30,7 +30,7 @@ private:
     }
 
 public:
-    AggregateQueue(F f) : func(f) {}
+    explicit AggregateQueue(std::function<T(T, T)> f) : func(f) {}
 
     void enqueue(T value) {
         pushWithAgg(inputStack, inputAggStack, value);
@@ -58,9 +58,33 @@ public:
         return func(outputAggStack.top(), inputAggStack.top());
     }
 
-    T peek() {
+    T front() {
         transferIfNeeded();
+        if (outputStack.empty()) {
+            throw std::runtime_error("Queue is empty!");
+        }
         return outputStack.top();
+    }
+
+    T back() {
+        if (isEmpty()) {
+            throw std::runtime_error("Queue is empty!");
+        }
+        if (inputStack.empty()) {
+            std::stack<T> tempStack;
+            while (!outputStack.empty()) {
+                tempStack.push(outputStack.top());
+                outputStack.pop();
+            }
+            T backElement = tempStack.top();
+            while (!tempStack.empty()) {
+                outputStack.push(tempStack.top());
+                tempStack.pop();
+            }
+            return backElement;
+        } else {
+            return inputStack.top();
+        }
     }
 
     bool isEmpty() {
@@ -73,9 +97,9 @@ int main() {
     auto maxFunc = [](int a, int b) { return std::max(a, b); };
     auto sumFunc = [](int a, int b) { return a + b; };
 
-    AggregateQueue<int, decltype(minFunc)> minQueue(minFunc);
-    AggregateQueue<int, decltype(maxFunc)> maxQueue(maxFunc);
-    AggregateQueue<int, decltype(sumFunc)> sumQueue(sumFunc);
+    AggregateQueue<int> minQueue(minFunc);
+    AggregateQueue<int> maxQueue(maxFunc);
+    AggregateQueue<int> sumQueue(sumFunc);
 
     minQueue.enqueue(5);
     minQueue.enqueue(3);
